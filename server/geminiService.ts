@@ -79,14 +79,14 @@ export async function callGeminiSafely(options: {
     return null;
   }
 
-  // 3. Try primary model: gemini-3.1-flash-lite
+  // 3. Try primary model: gemini-flash-latest (Ultra-Fast Gemini Flash)
   try {
     const config: any = {};
     if (systemInstruction) config.systemInstruction = systemInstruction;
     if (responseMimeType) config.responseMimeType = responseMimeType;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-flash-latest',
       contents,
       config,
     });
@@ -602,8 +602,8 @@ Exam Weightage: ${contextNote.examWeightageTip || 'High Yield'}
 `;
   }
 
-  const systemInstruction = `You are "Gemini AI Tutor" (Powered by Google Gemini 3.1 Flash-Lite Engine on Buzzing Brain).
-You are a lightning-fast, highly accurate AI Tutor trained on 25 YEARS OF AUTHENTIC EXAMINATION ARCHIVES (2000–2025):
+  const systemInstruction = `You are "Gemini AI Tutor" (Powered by Google Gemini Flash Engine - gemini-flash-latest on Buzzing Brain).
+You are a lightning-fast, ultra-responsive AI Tutor trained on 25 YEARS OF AUTHENTIC EXAMINATION ARCHIVES (2000–2025):
 - CBSE Board Examinations (Classes 9, 10, 11, and 12)
 - NEET-UG & AIPMT (2000–2025 Medical Entrance, including Dropper repeaters)
 - JEE Main & JEE Advanced / IIT-JEE (2000–2025 Engineering Entrance)

@@ -664,11 +664,11 @@ Return strictly valid JSON with schema:
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-black tracking-tight text-white">Gemini AI Tutor Studio</h1>
               <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 tracking-wider flex items-center gap-1">
-                <span>⚡ Powered by Google Gemini 3.1 Flash-Lite</span>
+                <span>⚡ Powered by Google Gemini Flash Engine (Ultra Fast)</span>
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Ultra-fast AI tutor with &lt;1s latency &bull; Interactive pedagogical learning, verified notes, video generator, and assessment workspace
+              Lightning-fast AI tutor with &lt;1s latency &bull; Interactive pedagogical learning, verified notes, video generator, and assessment workspace
             </p>
           </div>
         </div>

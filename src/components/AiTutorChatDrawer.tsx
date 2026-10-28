@@ -437,7 +437,7 @@ export const AiTutorChatDrawer: React.FC<AiTutorChatDrawerProps> = ({
             )}
             <p className="text-[10px] text-slate-400 truncate flex items-center gap-1.5">
               <span>{activeNote ? activeNote.chapter : `${initialGrade} • Gemini AI Tutor`}</span>
-              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/15 px-1 rounded font-bold">⚡ Flash-Lite</span>
+              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/15 px-1 rounded font-bold">⚡ Gemini Flash</span>
             </p>
           </div>
         </div>

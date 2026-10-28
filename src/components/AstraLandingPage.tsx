@@ -26,7 +26,8 @@ import {
   Activity,
   FlaskConical,
   Dna,
-  BrainCircuit
+  BrainCircuit,
+  MessageSquare
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -47,6 +48,7 @@ interface AstraLandingPageProps {
   onGoToCommunity?: () => void;
   onGoToAiTutor?: () => void;
   onGoToTeacher?: () => void;
+  onGoToParentBot?: () => void;
   onSignIn: () => void;
   onSignUp: () => void;
   user: UserProfile | null;
@@ -58,6 +60,7 @@ export const AstraLandingPage: React.FC<AstraLandingPageProps> = ({
   onGoToSyllabus,
   onGoToYouTube,
   onGoToLibrary,
+  onGoToParentBot,
   onGoToTests,
   onGoToDashboard,
   onGoToCourses,
@@ -459,6 +462,33 @@ export const AstraLandingPage: React.FC<AstraLandingPageProps> = ({
             </div>
             <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 pt-2 border-t border-white/5">
               <span>Join Community</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 9: Coaching Institute — Parent WhatsApp Chatbot (n8n Spec) */}
+          <div 
+            onClick={() => onGoToParentBot ? onGoToParentBot() : onGoToAiTutor?.()}
+            className="p-6 rounded-3xl astra-card border border-emerald-500/30 hover:border-emerald-500/60 transition-all cursor-pointer group space-y-4 flex flex-col justify-between shadow-lg shadow-emerald-950/20"
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  WhatsApp + AI
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
+                Coaching Institute — Parent Chatbot
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Parents message the institute WhatsApp helpline to get instant attendance %, test score trends, teacher remarks, and fee status explained by Gemini Flash in Hindi/Hinglish/English.
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 pt-2 border-t border-white/5">
+              <span>Launch WhatsApp Bot Simulator</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>

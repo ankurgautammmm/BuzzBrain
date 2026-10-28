@@ -50,6 +50,7 @@ import { AiTutorChatDrawer } from './components/AiTutorChatDrawer';
 import { AiTutorStudio } from './components/AiTutorStudio';
 import { TeacherPortal } from './components/TeacherPortal';
 import { StudentProfileSection } from './components/StudentProfileSection';
+import { CoachingParentBotHub } from './components/CoachingParentBotHub';
 import { AuthWallModal } from './components/AuthWallModal';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { InteractiveSpaceBackground } from './components/InteractiveSpaceBackground';
@@ -941,6 +942,7 @@ export default function App() {
             onGoToCommunity={() => setCurrentTab('community')}
             onGoToAiTutor={() => setCurrentTab('ai-tutor')}
             onGoToTeacher={() => setCurrentTab('teacher')}
+            onGoToParentBot={() => setCurrentTab('parent-bot')}
             onSignIn={handleSignIn}
             onSignUp={handleSignUp}
             user={userProfile}
@@ -1323,6 +1325,11 @@ export default function App() {
             activeClass={activeClass}
             onClassChange={(cls) => setActiveClass(cls)}
           />
+        )}
+
+        {/* Tab: Coaching Institute — Parent Chatbot (WhatsApp + AI Engine) */}
+        {currentTab === 'parent-bot' && (
+          <CoachingParentBotHub />
         )}
       </main>
 

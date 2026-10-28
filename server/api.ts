@@ -1256,6 +1256,129 @@ apiRouter.put('/academic/settings', requireAcademicPermission('academic.settings
   res.json({ success: true, settings: updated });
 });
 
+// ============================================================================
+// 8. COACHING INSTITUTE — PARENT CHATBOT (WHATSAPP + AI ENGINE)
+// ============================================================================
+import { 
+  processParentChatbotMessage, 
+  STUDENTS_STORE, 
+  buildDeterministicFacts, 
+  QUERY_LOGS_STORE, 
+  OWNER_ALERTS_STORE, 
+  BLOCKED_STORE, 
+  resetBlockedPhone 
+} from './parentBotService';
+
+// POST /api/parent-bot/chat — Interactive simulator / Webhook proxy
+apiRouter.post('/parent-bot/chat', async (req: Request, res: Response) => {
+  try {
+    const { from, name, text, nonText, childHint } = req.body;
+    if (!from || (text === undefined && !nonText)) {
+      return res.status(400).json({ error: 'Phone number (from) and message text are required.' });
+    }
+
+    const result = await processParentChatbotMessage({
+      from: String(from),
+      name: name ? String(name) : 'Parent',
+      text: String(text || ''),
+      nonText: Boolean(nonText),
+      childHint: childHint ? String(childHint) : undefined,
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error in /api/parent-bot/chat:', error);
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Parent chatbot processing error' });
+  }
+});
+
+// POST /api/parent-bot/webhook — Standard WhatsApp Meta Webhook Payload
+apiRouter.post('/parent-bot/webhook', async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+    // Extract message from standard Meta WhatsApp webhook structure
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value || body;
+    const message = value.messages?.[0];
+    const contact = value.contacts?.[0];
+
+    if (!message) {
+      return res.status(200).json({ status: 'ignored_no_message' });
+    }
+
+    if (message.type === 'reaction') {
+      return res.status(200).json({ status: 'ignored_reaction' });
+    }
+
+    const from = message.from;
+    const name = contact?.profile?.name || 'Parent';
+    const isText = message.type === 'text';
+    const text = isText ? String(message.text?.body || '').trim() : '';
+    const nonText = !isText;
+
+    const result = await processParentChatbotMessage({
+      from,
+      name,
+      text,
+      nonText,
+    });
+
+    return res.json({
+      status: 'success',
+      replySent: result.reply,
+      route: result.status,
+      studentId: result.student?.Student_ID,
+    });
+  } catch (error) {
+    console.error('Error in /api/parent-bot/webhook:', error);
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Webhook error' });
+  }
+});
+
+// GET /api/parent-bot/students — Roster of enrolled students with parent phones & batch
+apiRouter.get('/parent-bot/students', (_req: Request, res: Response) => {
+  res.json({ success: true, students: STUDENTS_STORE });
+});
+
+// GET /api/parent-bot/student/:id/facts — Compute and inspect deterministic facts
+apiRouter.get('/parent-bot/student/:id/facts', (req: Request, res: Response) => {
+  const student = STUDENTS_STORE.find((s) => s.Student_ID === req.params.id);
+  if (!student) {
+    return res.status(404).json({ error: 'Student not found' });
+  }
+  const facts = buildDeterministicFacts(student);
+  res.json({ success: true, student, facts });
+});
+
+// GET /api/parent-bot/logs — Query logs for audit and teacher review
+apiRouter.get('/parent-bot/logs', (_req: Request, res: Response) => {
+  res.json({ success: true, count: QUERY_LOGS_STORE.length, logs: QUERY_LOGS_STORE });
+});
+
+// GET /api/parent-bot/alerts — Owner Alerts (Escalations, Unregistered ID guesses)
+apiRouter.get('/parent-bot/alerts', (_req: Request, res: Response) => {
+  res.json({ success: true, count: OWNER_ALERTS_STORE.length, alerts: OWNER_ALERTS_STORE });
+});
+
+// GET /api/parent-bot/blocked — List currently blocked numbers
+apiRouter.get('/parent-bot/blocked', (_req: Request, res: Response) => {
+  const list = Array.from(BLOCKED_STORE.entries()).map(([phone, rec]) => ({ phone, ...rec }));
+  res.json({ success: true, blocked: list });
+});
+
+// POST /api/parent-bot/reset-blocked — Unblock number
+apiRouter.post('/parent-bot/reset-blocked', (req: Request, res: Response) => {
+  const { phone } = req.body;
+  if (!phone) {
+    BLOCKED_STORE.clear();
+    return res.json({ success: true, message: 'All blocked entries cleared' });
+  }
+  const removed = resetBlockedPhone(phone);
+  res.json({ success: true, phone, removed });
+});
+
+
 
 
 

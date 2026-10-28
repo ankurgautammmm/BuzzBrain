@@ -24,7 +24,8 @@ import {
   Heart,
   Sliders,
   FlaskConical,
-  Dna
+  Dna,
+  MessageSquare
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { UserProfile, AuthStateStatus } from '../types';
@@ -53,7 +54,8 @@ export type NavTab =
   | 'admin' 
   | 'terms' 
   | 'privacy'
-  | 'profile';
+  | 'profile'
+  | 'parent-bot';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -294,6 +296,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Users className="w-3.5 h-3.5 text-amber-400" />
               <span>Profile</span>
+            </button>
+
+            {/* Parent Chatbot (WhatsApp + AI Engine) Tab */}
+            <button
+              onClick={() => onTabChange('parent-bot')}
+              className={`px-3 py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 font-bold ${
+                currentTab === 'parent-bot'
+                  ? 'text-white bg-gradient-to-r from-emerald-600 to-teal-600 shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400/50 scale-[1.02]'
+                  : 'text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:text-white'
+              }`}
+              title="Coaching Institute Parent Chatbot (WhatsApp + AI Facts Engine)"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Parent Bot</span>
+              <span className="text-[9px] px-1 py-0.2 rounded-full bg-emerald-500/40 text-emerald-200 font-mono font-bold">
+                WhatsApp
+              </span>
             </button>
 
             {/* Virtual Practical Academy Dedicated Main Tab */}
@@ -694,6 +713,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`px-3 py-1 rounded-lg shrink-0 ${currentTab === 'community' ? 'text-emerald-400 font-bold bg-white/15' : 'hover:bg-white/5'}`}
           >
             Community
+          </button>
+          <button
+            onClick={() => onTabChange('parent-bot')}
+            className={`px-3 py-1 rounded-lg shrink-0 flex items-center gap-1 font-bold ${
+              currentTab === 'parent-bot'
+                ? 'text-white bg-emerald-600 shadow-xs'
+                : 'text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 hover:bg-white/5'
+            }`}
+          >
+            <MessageSquare className="w-3 h-3 text-emerald-400" />
+            <span>Parent Bot</span>
           </button>
           <button
             onClick={() => onTabChange('practicals')}
