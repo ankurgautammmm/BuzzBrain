@@ -19,10 +19,11 @@ import {
   subscribeToStudyNotes, 
   submitComplaint, 
   updateComplaintStatus, 
-  subscribeToComplaints,
-  getStoredGuestUser,
-  onGuestAuthStateChanged
+  subscribeToComplaints
 } from './services/firebase';
+import { AuthPage } from './components/AuthPage';
+import { CurriculumNotesDirectory } from './components/CurriculumNotesDirectory';
+import { CurriculumChapter } from './data/curriculumHierarchy';
 import { logger } from './services/logger';
 import { Navbar, NavTab } from './components/Navbar';
 import { AstraLandingPage } from './components/AstraLandingPage';
@@ -46,6 +47,7 @@ import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { ComplaintModal } from './components/ComplaintModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { TermsPrivacyModal } from './components/TermsPrivacyModal';
+import { ProfessionalFooter } from './components/ProfessionalFooter';
 import { AiTutorChatDrawer } from './components/AiTutorChatDrawer';
 import { AiTutorStudio } from './components/AiTutorStudio';
 import { TeacherPortal } from './components/TeacherPortal';
@@ -74,6 +76,7 @@ import {
   deleteOfflineNote 
 } from './services/offlineNotesCache';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { syncUserProfileToMongo, saveNoteToMongo } from './services/mongoStorage';
 import { 
   StudyNote, 
   UserProfile, 
@@ -110,9 +113,9 @@ export default function App() {
   // App Navigation & Selected Grade (Default to Class 11 or landing)
   const [currentTab, setCurrentTab] = useState<NavTab>('landing');
   const [activeClass, setActiveClass] = useState<string>('Class 11');
-  const [labsInitialSubTab, setLabsInitialSubTab] = useState<'virtual_academy' | 'mindmaps' | 'organs3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals'>('virtual_academy');
+  const [labsInitialSubTab, setLabsInitialSubTab] = useState<'virtual_academy' | 'mindmaps' | 'organs3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals' | 'scilab'>('virtual_academy');
 
-  const handleGoToLabs = (subTab: 'virtual_academy' | 'mindmaps' | 'organs3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals' = 'virtual_academy') => {
+  const handleGoToLabs = (subTab: 'virtual_academy' | 'mindmaps' | 'organs3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals' | 'scilab' = 'virtual_academy') => {
     setLabsInitialSubTab(subTab);
     setCurrentTab('labs');
   };
@@ -130,11 +133,15 @@ export default function App() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [queuedCommand, setQueuedCommand] = useState<string | undefined>(undefined);
 
+  // Notes Directory State (Default to true so Notes does NOT open directly into a note)
+  const [isBrowsingNotesDirectory, setIsBrowsingNotesDirectory] = useState(true);
+  const [footerMoreOpen, setFooterMoreOpen] = useState(false);
+
   // Complaints & Grievance State
   const [complaintsList, setComplaintsList] = useState<ComplaintTicket[]>([]);
 
-  // Tests Initial SubTab Focus (Catalog vs 25-Yr PYQ Guru vs PYQ Test Simulator)
-  const [testInitialSubTab, setTestInitialSubTab] = useState<'catalog' | 'pyq_guru' | 'pyq_test'>('catalog');
+  // Tests Initial SubTab Focus (Exam Builder vs Catalog vs 50-Yr PYQ Guru vs PYQ Test Simulator)
+  const [testInitialSubTab, setTestInitialSubTab] = useState<'exam_builder' | 'catalog' | 'pyq_guru' | 'pyq_test'>('exam_builder');
 
   // Unified Topper-Style Handwritten Notes State
   const [topperPaperStyle, setTopperPaperStyle] = useState<PaperStyle>('ruled');
@@ -209,10 +216,9 @@ export default function App() {
 
     const handleUserSync = async (user: FirebaseUser | null) => {
       if (!isMounted) return;
-      const effectiveUser = user || getStoredGuestUser();
-      setFirebaseUser(effectiveUser);
+      setFirebaseUser(user);
 
-      if (!effectiveUser) {
+      if (!user) {
         setUserProfile(null);
         setAuthStatus('UNAUTHENTICATED');
         return;
@@ -221,19 +227,18 @@ export default function App() {
       setAuthStatus('AUTHENTICATED_PROFILE_LOADING');
 
       try {
-        const profile = await syncUserProfile(effectiveUser, activeClass);
+        const profile = await syncUserProfile(user, activeClass);
         if (!isMounted) return;
         setUserProfile(profile);
         setAuthStatus('AUTHENTICATED_PROFILE_READY');
-
-        // Profile ready - profile creation is maintained in dedicated Profile tab
+        syncUserProfileToMongo(profile).catch(() => {});
       } catch (err) {
         logger.error('App', 'Profile sync notice:', err);
         if (!isMounted) return;
         setAuthStatus('AUTHENTICATED_PROFILE_ERROR');
-        // Resilient fallback profile keeps student authenticated
-        const fallback = buildFallbackUserProfile(effectiveUser, activeClass);
+        const fallback = buildFallbackUserProfile(user, activeClass);
         setUserProfile(fallback);
+        syncUserProfileToMongo(fallback).catch(() => {});
       }
     };
 
@@ -241,17 +246,10 @@ export default function App() {
       await handleUserSync(user);
     });
 
-    const unsubscribeGuest = onGuestAuthStateChanged((guestUser) => {
-      if (!auth.currentUser) {
-        handleUserSync(guestUser);
-      }
-    });
-
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
       isMounted = false;
       unsubscribeAuth();
-      unsubscribeGuest();
     };
   }, []);
 
@@ -502,6 +500,7 @@ export default function App() {
       await saveOfflineNote(fullNote);
       setNotesList((prev) => [fullNote, ...prev.filter(n => n.id !== noteId)]);
       setActiveNoteSavedId(noteId);
+      saveNoteToMongo(fullNote).catch(() => {});
       showToast('Handwritten note saved to your Student Library (Offline & Online ready)!');
     } catch (err) {
       logger.error('App', 'Failed to save note to cache:', err);
@@ -637,13 +636,13 @@ export default function App() {
   const handleSignIn = () => {
     setAuthModalMode('signin');
     setAuthWallMessage(undefined);
-    setShowAuthWall(true);
+    setCurrentTab('auth');
   };
 
   const handleSignUp = () => {
     setAuthModalMode('signup');
     setAuthWallMessage(undefined);
-    setShowAuthWall(true);
+    setCurrentTab('auth');
   };
 
   const isAdmin = Boolean(
@@ -768,9 +767,10 @@ export default function App() {
       setShowAuthWall(true);
       return;
     }
-    if (!firebaseUser && tab !== 'landing' && tab !== 'terms' && tab !== 'privacy') {
-      setAuthWallMessage("Login or Sign Up is compulsory before accessing study materials, handwritten notes, syllabus, textbooks, and tests. Please sign in or create your free student account.");
-      setShowAuthWall(true);
+    if (!firebaseUser && tab !== 'landing' && tab !== 'terms' && tab !== 'privacy' && tab !== 'auth') {
+      setAuthWallMessage(`Please log in or create your free student account to access ${tab === 'studio' ? 'Handwritten Notes' : tab === 'tests' ? 'Chapter Practice Tests' : tab === 'labs' ? '3D Labs & Practicals' : tab === 'profile' ? 'Student Profile' : 'this section'}.`);
+      setAuthModalMode('signin');
+      setCurrentTab('auth');
       return;
     }
     setCurrentTab(tab);
@@ -949,85 +949,71 @@ export default function App() {
           />
         )}
 
-        {/* Tab: Handwritten Studio */}
+        {/* Tab: Handwritten Studio — Curriculum Directory First */}
         {currentTab === 'studio' && (
           <div className="space-y-6">
-            {/* If user is not logged in, show student encouragement banner */}
-            {!firebaseUser && (
-              <div className="astra-card rounded-2xl p-4 sm:p-5 border border-amber-400/30 bg-amber-400/5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl print:hidden no-print">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                      <span>Free NCERT Handwritten Notes Studio</span>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">100% OPEN</span>
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Explore authentic 4-page topper register notes with ruled pages, formulas, diagrams &amp; PYQs. Sign in free anytime to save to your personal study locker!
-                    </p>
-                  </div>
-                </div>
+            {isBrowsingNotesDirectory ? (
+              <CurriculumNotesDirectory
+                initialClass={
+                  (activeClass === 'Class 9' || activeClass === 'Class 10' || activeClass === 'Class 12')
+                    ? (activeClass as any)
+                    : 'Class 11'
+                }
+                onSelectChapter={(chapter) => {
+                  setTopperTopic(chapter.title);
+                  setTopperGrade(chapter.classGrade);
+                  setTopperSubject(chapter.subject);
+                  const curated = getCuratedChapterNote(chapter.classGrade, chapter.subject, chapter.title);
+                  setCurrentActiveNote(curated);
+                  setTopperMarkdown(convertNotePayloadToTopperMarkdown(curated));
+                  setIsBrowsingNotesDirectory(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            ) : (
+              <div className="space-y-4">
+                <NotebookHeader
+                  topic={topperTopic}
+                  grade={topperGrade}
+                  subject={topperSubject}
+                  onBackToDirectory={() => setIsBrowsingNotesDirectory(true)}
+                  onOpenGenerateModal={() => setShowTopicGeneratorModal(true)}
+                  onOpenPromptModal={() => setShowSystemPromptModal(true)}
+                  onOpenQuizModal={() => setShowRevisionQuiz(true)}
+                  onOpenChapterDirectory={() => setShowChapterDirectory(true)}
+                  paperStyle={topperPaperStyle}
+                  onChangePaperStyle={setTopperPaperStyle}
+                  handwritingFont={topperFont}
+                  onChangeFont={setTopperFont}
+                  inkColor={topperInkColor}
+                  onChangeInkColor={setTopperInkColor}
+                  fontSize={topperFontSize}
+                  onChangeFontSize={setTopperFontSize}
+                  markdown={topperMarkdown}
+                />
 
-                <button
-                  onClick={handleSignIn}
-                  className="px-5 py-2.5 bg-white hover:bg-slate-200 text-slate-950 font-extrabold rounded-xl text-xs shadow-lg transition-all shrink-0 cursor-pointer active:scale-95"
-                >
-                  Log In / Sign Up Free
-                </button>
+                <TopperRegisterPage
+                  topic={topperTopic}
+                  grade={topperGrade}
+                  subject={topperSubject}
+                  markdown={topperMarkdown}
+                  paperStyle={topperPaperStyle}
+                  handwritingFont={topperFont}
+                  inkColor={topperInkColor}
+                  fontSize={topperFontSize}
+                  stickyNotes={topperStickyNotes}
+                  onAddStickyNote={(text, color) => {
+                    setTopperStickyNotes((prev) => [
+                      ...prev,
+                      { id: `sticky_${Date.now()}`, text, color }
+                    ]);
+                  }}
+                  onDeleteStickyNote={(id) => {
+                    setTopperStickyNotes((prev) => prev.filter((n) => n.id !== id));
+                  }}
+                />
               </div>
             )}
-
-            <div className="space-y-4">
-              <NotebookHeader
-                topic={topperTopic}
-                grade={topperGrade}
-                subject={topperSubject}
-                onOpenGenerateModal={() => setShowTopicGeneratorModal(true)}
-                onOpenPromptModal={() => setShowSystemPromptModal(true)}
-                onOpenQuizModal={() => setShowRevisionQuiz(true)}
-                onOpenChapterDirectory={() => setShowChapterDirectory(true)}
-                onNavigateToPyq={() => {
-                  setTestInitialSubTab('pyq_guru');
-                  setCurrentTab('tests');
-                }}
-                onNavigateToPyqTest={() => {
-                  setTestInitialSubTab('pyq_test');
-                  setCurrentTab('tests');
-                }}
-                paperStyle={topperPaperStyle}
-                onChangePaperStyle={setTopperPaperStyle}
-                handwritingFont={topperFont}
-                onChangeFont={setTopperFont}
-                inkColor={topperInkColor}
-                onChangeInkColor={setTopperInkColor}
-                fontSize={topperFontSize}
-                onChangeFontSize={setTopperFontSize}
-                markdown={topperMarkdown}
-              />
-
-              <TopperRegisterPage
-                topic={topperTopic}
-                grade={topperGrade}
-                subject={topperSubject}
-                markdown={topperMarkdown}
-                paperStyle={topperPaperStyle}
-                handwritingFont={topperFont}
-                inkColor={topperInkColor}
-                fontSize={topperFontSize}
-                stickyNotes={topperStickyNotes}
-                onAddStickyNote={(text, color) => {
-                  setTopperStickyNotes((prev) => [
-                    ...prev,
-                    { id: `sticky_${Date.now()}`, text, color }
-                  ]);
-                }}
-                onDeleteStickyNote={(id) => {
-                  setTopperStickyNotes((prev) => prev.filter((n) => n.id !== id));
-                }}
-              />
-            </div>
           </div>
         )}
 
@@ -1206,18 +1192,13 @@ export default function App() {
         )}
 
         {/* Tab: Mind Maps & Virtual Labs */}
-        {currentTab === 'labs' && (
+        {(currentTab === 'labs' || currentTab === 'scilab') && (
           <InteractiveLabsAndMindMaps
             activeClass={activeClass}
-            initialSubTab={labsInitialSubTab}
+            initialSubTab={currentTab === 'scilab' ? 'scilab' : labsInitialSubTab}
             userProfile={userProfile}
-            onGoToSciLab={() => setCurrentTab('scilab')}
+            onGoToSciLab={() => handleGoToLabs('scilab')}
           />
-        )}
-
-        {/* Tab: SciLab BioMolecular Studio (Bioinformatics, Molecular Dynamics, Chemistry Tools & Biological Databases) */}
-        {currentTab === 'scilab' && (
-          <SciLabStudio />
         )}
 
         {/* Tab: Exam Revision Planner (Phase 4) */}
@@ -1331,149 +1312,34 @@ export default function App() {
         {currentTab === 'parent-bot' && (
           <CoachingParentBotHub />
         )}
+        {/* Tab: Dedicated Login & Sign Up Page */}
+        {currentTab === 'auth' && (
+          <AuthPage
+            initialMode={authModalMode}
+            targetMessage={authWallMessage}
+            onSuccess={() => {
+              setCurrentTab('landing');
+              showToast('Authenticated successfully! Welcome to Buzzing Brain.');
+            }}
+            onBackToHome={() => setCurrentTab('landing')}
+            onOpenTerms={() => setCurrentTab('terms')}
+            onOpenPrivacy={() => setCurrentTab('privacy')}
+          />
+        )}
       </main>
 
-      {/* Astra Footer with Authentication & Open Access Transparency */}
-      <footer className="bg-black/80 border-t border-white/10 mt-16 py-10 text-xs text-slate-400 print:hidden relative z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          {/* Footer Authentication & Open Access Transparency Banner */}
-          <div className="p-6 rounded-2xl bg-gradient-to-r from-[#070b1e] via-[#0b1029] to-[#080d24] border border-amber-400/20 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="space-y-1 text-left">
-              <div className="flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${userProfile ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                <span className="text-xs font-bold text-white uppercase tracking-wider">
-                  {userProfile ? 'Verified Account Session' : 'Open Access Guest Mode (No Mandatory Login)'}
-                </span>
-                {userProfile && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-                    {userProfile.email || userProfile.displayName}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                Buzzing Brain opens all NCERT textbooks, chapter notes, 3D labs, and revision planners for free without forcing you to log in. Authenticating your Google account or phone number syncs your personal scorecards, test analytics, and notes across all your devices.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
-              {userProfile ? (
-                <>
-                  <button
-                    onClick={() => setCurrentTab('profile')}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition cursor-pointer"
-                  >
-                    Manage Profile
-                  </button>
-                  <button
-                    onClick={handleSignOut}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold transition cursor-pointer"
-                  >
-                    Log Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleSignIn}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span>Sign In with Google</span>
-                  </button>
-                  <button
-                    onClick={() => setCurrentTab('profile')}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-semibold transition cursor-pointer"
-                  >
-                    Setup Student Profile
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <img
-                src="/BuzzingBrain_Video_Watermark_150x150.png"
-                alt="Buzzing Brain"
-                className="w-8 h-8 rounded-full border border-amber-400/80 object-cover"
-              />
-              <div>
-                <span className="font-extrabold text-sm text-white tracking-tight">Buzzing Brain</span>
-                <span className="text-slate-500 block text-[11px]">Free Education for All &bull; Student-First Intelligent Learning Platform</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-medium text-slate-400">
-              <button
-                onClick={() => setCurrentTab('landing')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Free Education
-              </button>
-              <button
-                onClick={() => setCurrentTab('profile')}
-                className="hover:text-amber-300 text-amber-400 font-bold transition-colors cursor-pointer"
-              >
-                Profile &amp; Auth
-              </button>
-              <button
-                onClick={() => setCurrentTab('syllabus')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                2026–27 Syllabus
-              </button>
-              <button
-                onClick={() => setCurrentTab('books')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                NCERT Books
-              </button>
-              <button
-                onClick={() => setCurrentTab('tests')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Practice Tests
-              </button>
-              <button
-                onClick={() => setCurrentTab('studio')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Handwritten Studio
-              </button>
-              <button
-                onClick={() => setCurrentTab('youtube')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                YouTube (@BrainBuzz2702)
-              </button>
-              <button
-                onClick={() => setCurrentTab('terms')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Terms and Conditions
-              </button>
-              <button
-                onClick={() => setCurrentTab('privacy')}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Privacy Policy
-              </button>
-              <button
-                onClick={() => setShowComplaintModal(true)}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                Grievance Desk
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-            <span>&copy; {new Date().getFullYear()} Buzzing Brain. All NCERT references adhere to CBSE public curriculum.</span>
-            <span className="font-mono">YouTube: @BrainBuzz2702 &bull; Free Open Platform</span>
-          </div>
-        </div>
-      </footer>
+      {/* Enterprise-Grade Professional Academic Footer */}
+      <ProfessionalFooter
+        onNavigate={handleTabChange}
+        onOpenComplaint={() => {
+          if (!firebaseUser) {
+            handleSignIn();
+          } else {
+            setShowComplaintModal(true);
+          }
+        }}
+        onGoToLabs={handleGoToLabs}
+      />
 
       {/* Modals & Drawers */}
       <OnboardingModal
@@ -1502,34 +1368,6 @@ export default function App() {
         onClose={() => setShowLegalModal(false)}
         initialTab={legalModalTab}
       />
-
-      <AiTutorChatDrawer
-        isOpen={showTutorChat}
-        onClose={() => setShowTutorChat(false)}
-        activeNote={currentActiveNote}
-        initialGrade={activeClass}
-        onApplyCommand={(cmd) => {
-          setShowTutorChat(false);
-          handleExecuteCommand(cmd);
-        }}
-      />
-
-      {/* Floating AI Tutor Quick Trigger Button */}
-      {!showTutorChat && (
-        <button
-          onClick={() => setShowTutorChat(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-xl shadow-purple-900/40 border border-purple-400/30 transition-all hover:scale-105 active:scale-95 cursor-pointer group"
-          title="Open AI Tutor (Hinglish, Hindi & English explanations)"
-        >
-          <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-          </div>
-          <span>Ask AI Tutor</span>
-          <span className="hidden sm:inline-block text-[10px] bg-purple-900/60 text-purple-200 px-2 py-0.5 rounded-full border border-purple-400/30 font-medium">
-            Hinglish • हिंदी • English
-          </span>
-        </button>
-      )}
 
       <AuthWallModal
         isOpen={showAuthWall}

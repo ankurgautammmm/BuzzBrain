@@ -49,11 +49,11 @@ assert(passedSections.includes('Official NCERT Source Citation'), 'Includes offi
 // 3. Chapter Coverage Matrix Comparison
 console.log('\n3. Chapter Coverage Matrix Comparison');
 const { matrix, summary } = buildChapterCoverageMatrix(COMPREHENSIVE_CHAPTER_NOTES);
-assert(summary.totalSyllabusChapters === 217, `Total syllabus chapters audited: ${summary.totalSyllabusChapters} (expected 217)`);
+assert(summary.totalSyllabusChapters === 242, `Total syllabus chapters audited: ${summary.totalSyllabusChapters} (expected 242)`);
 assert(summary.missingCount === 0, '0 missing chapters in syllabus coverage');
 assert(summary.completeCuratedCount >= 6, `Complete curated chapters count: ${summary.completeCuratedCount}`);
 assert(summary.placeholderOutlineCount > 0, `AI synthesized outlines count: ${summary.placeholderOutlineCount}`);
-assert(matrix.length === 217, `Matrix rows count matches 217: ${matrix.length}`);
+assert(matrix.length === 242, `Matrix rows count matches 242: ${matrix.length}`);
 
 // Check specific curriculum records
 const cellRecord = matrix.find(r => r.classGrade === 'Class 9' && r.subject === 'Science' && r.officialTitle.includes('Organisation in Living Systems'));

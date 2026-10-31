@@ -25,7 +25,11 @@ import {
   ExternalLink,
   ChevronRight,
   Sliders,
-  Filter
+  Filter,
+  Zap,
+  Volume2,
+  Shield,
+  Flame
 } from 'lucide-react';
 
 interface AnatomyLabWorkspaceProps {
@@ -170,26 +174,30 @@ export const AnatomyLabWorkspace: React.FC<AnatomyLabWorkspaceProps> = ({
         </div>
 
         {/* Global Organ Switcher Pills */}
-        <div className="flex flex-wrap md:flex-col gap-2 shrink-0 self-stretch sm:self-auto relative z-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-col gap-2 shrink-0 self-stretch sm:self-auto relative z-10">
           {ANATOMY_ORGAN_REGISTRY.map(organ => {
             const isSelected = organ.id === activeOrgan.id;
             return (
               <button
                 key={organ.id}
                 onClick={() => handleSelectOrgan(organ.id)}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between gap-3 shadow-md ${
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between gap-2.5 shadow-md ${
                   isSelected
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white ring-2 ring-purple-400/50 scale-[1.02]'
                     : 'bg-slate-950/80 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  {organ.id === 'organ-heart' && <Heart className="w-4 h-4 text-rose-400" />}
-                  {organ.id === 'organ-kidney' && <Activity className="w-4 h-4 text-amber-400" />}
-                  {organ.id === 'organ-brain' && <Brain className="w-4 h-4 text-purple-400" />}
-                  <span>{organ.name.split('(')[0].trim()}</span>
+                  {organ.id === 'organ-heart' && <Heart className="w-3.5 h-3.5 text-rose-400" />}
+                  {organ.id === 'organ-kidney' && <Activity className="w-3.5 h-3.5 text-amber-400" />}
+                  {organ.id === 'organ-brain' && <Brain className="w-3.5 h-3.5 text-purple-400" />}
+                  {organ.id === 'organ-stomach' && <Flame className="w-3.5 h-3.5 text-red-400" />}
+                  {organ.id === 'organ-ear' && <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+                  {organ.id === 'organ-liver' && <Shield className="w-3.5 h-3.5 text-emerald-400" />}
+                  {organ.id === 'organ-neuron' && <Zap className="w-3.5 h-3.5 text-yellow-400" />}
+                  <span className="truncate max-w-[130px]">{organ.name.split('(')[0].replace('Human ', '').trim()}</span>
                 </div>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10">3D</span>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/10 shrink-0">3D</span>
               </button>
             );
           })}

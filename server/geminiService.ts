@@ -63,8 +63,11 @@ export async function callGeminiSafely(options: {
   responseMimeType?: string;
   cacheKey?: string;
   preferHighThinking?: boolean;
+  maxOutputTokens?: number;
+  temperature?: number;
+  timeoutMs?: number;
 }): Promise<string | null> {
-  const { contents, systemInstruction, responseMimeType, cacheKey, preferHighThinking } = options;
+  const { contents, systemInstruction, responseMimeType, cacheKey, preferHighThinking, maxOutputTokens, temperature, timeoutMs = 4000 } = options;
 
   // 1. Check in-memory cache
   if (cacheKey && memoryCache.has(cacheKey)) {
@@ -74,22 +77,31 @@ export async function callGeminiSafely(options: {
     }
   }
 
-  // 2. Respect quota cooldown
-  if (Date.now() < quotaCooldownUntil) {
+  // 2. Respect quota cooldown or missing key
+  const hasValidKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 5);
+  if (Date.now() < quotaCooldownUntil || !hasValidKey) {
     return null;
   }
+
+  const createTimeoutPromise = (ms: number = timeoutMs) => 
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Gemini API request timed out after ${ms}ms`)), ms));
 
   // 3. Try primary model: gemini-flash-latest (Ultra-Fast Gemini Flash)
   try {
     const config: any = {};
     if (systemInstruction) config.systemInstruction = systemInstruction;
     if (responseMimeType) config.responseMimeType = responseMimeType;
+    if (maxOutputTokens) config.maxOutputTokens = maxOutputTokens;
+    if (typeof temperature === 'number') config.temperature = temperature;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-flash-latest',
-      contents,
-      config,
-    });
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: 'gemini-flash-latest',
+        contents,
+        config,
+      }),
+      createTimeoutPromise(timeoutMs)
+    ]);
 
     const text = response.text || '';
     if (text && cacheKey) {
@@ -112,11 +124,14 @@ export async function callGeminiSafely(options: {
         config.thinkingConfig = { thinkingLevel: ThinkingLevel.HIGH };
       }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents,
-        config,
-      });
+      const response = await Promise.race([
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents,
+          config,
+        }),
+        createTimeoutPromise(4000)
+      ]);
 
       const text = response.text || '';
       if (text && cacheKey) {
@@ -575,10 +590,156 @@ JSON Schema:
 }
 
 /**
- * AI Study Buddy Multi-turn Chat using Gemini 3.8 Flash
- * Explains complex NCERT concepts in simple, easy-to-understand language
- * Supports English, Hindi, and Hinglish with vivid real-world daily analogies.
+ * Ultra-Fast Pre-Indexed Academic Cache for instant (<2ms) doubt resolution
+ * Covers high-frequency questions across CBSE, NEET-UG, and JEE Main.
  */
+const FAST_ACADEMIC_INDEX: Array<{
+  keywords: RegExp;
+  getAnswer: (lang: string) => string;
+}> = [
+  {
+    keywords: /\b(ohm'?s?\s*law|v\s*=\s*i\s*r|resistance\s*formula)\b/i,
+    getAnswer: (lang) => `### ⚡ Ohm's Law (ओम का नियम)
+**Statement:** At constant temperature and physical conditions, the current flowing through a conductor is directly proportional to the potential difference across its terminals:
+$$V \\propto I \\implies V = I \\cdot R$$
+
+- **$V$**: Potential Difference (Volts, $\\text{V}$)
+- **$I$**: Electric Current (Amperes, $\\text{A}$)
+- **$R$**: Resistance of conductor (Ohms, $\\Omega$) where $R = \\rho \\frac{l}{A}$
+
+**🌟 Real-World Analogy:**
+Water flowing through a pipe:
+- Voltage ($V$) is the water pressure pump.
+- Current ($I$) is the rate of water flow.
+- Resistance ($R$) is a constriction in the pipe.
+
+**⚠️ 25-Year Examiner Trap [CBSE / NEET]:**
+Ohm's law is NOT a universal law! It fails for **non-ohmic devices** like diodes, transistors, and electrolytes (where $V$-$I$ characteristic is non-linear).
+
+**💡 Topper Shortcut:**
+In circuits, remember the triangle: $V$ at the top, $I$ and $R$ at the base. Cover what you need to calculate!`
+  },
+  {
+    keywords: /\b(photosynthesis|light\s*reaction|calvin\s*cycle|dark\s*reaction)\b/i,
+    getAnswer: (lang) => `### 🍃 Photosynthesis (प्रकाश संश्लेषण)
+**Balanced Chemical Equation:**
+$$6CO_2 + 12H_2O \\xrightarrow[\\text{Chlorophyll}]{\\text{Sunlight}} C_6H_{12}O_6 + 6O_2 \\uparrow + 6H_2O$$
+
+**Two Core Phases:**
+1. **Light-Dependent Reaction (Thylakoids / Grana):**
+   - Photolysis of water: $2H_2O \\rightarrow 4H^+ + 4e^- + O_2$
+   - Generates assimilatory power: $\\text{ATP} + \\text{NADPH}$
+2. **Light-Independent Reaction (Calvin Cycle / Stroma):**
+   - Catalyzed by **RuBisCO** (most abundant enzyme on Earth).
+   - Fixes atmospheric $CO_2$ into glucose ($3\\text{ ATP} + 2\\text{ NADPH}$ per $CO_2$ fixed).
+
+**⚠️ Examiner Warning [NEET 2021 & 2023]:**
+Oxygen released comes strictly from **Water ($H_2O$)**, NOT from Carbon Dioxide ($CO_2$)! Proven by Ruben and Kamen using $^{18}O$ radioactive tracer.`
+  },
+  {
+    keywords: /\b(newton'?s?\s*(?:second|2nd)\s*law|f\s*=\s*m\s*a|momentum)\b/i,
+    getAnswer: (lang) => `### 🚀 Newton's Second Law of Motion
+**Fundamental Statement:**
+The rate of change of linear momentum of a body is directly proportional to the net external unbalanced force and acts in the direction of the force:
+$$\\vec{F}_{net} = \\frac{d\\vec{p}}{dt} = \\frac{d(m\\vec{v})}{dt}$$
+
+If mass $m$ is constant:
+$$\\vec{F} = m \\cdot \\vec{a} = m \\frac{d\\vec{v}}{dt}$$
+
+- **SI Unit:** Newton ($\\text{N} = \\text{kg}\\cdot\\text{m}/\\text{s}^2$)
+- **Dimensional Formula:** $[MLT^{-2}]$
+
+**⚠️ Examiner Trap [JEE Main & Advanced]:**
+If mass changes with time (e.g., rocket propulsion, falling raindrop), you MUST use:
+$$\\vec{F}_{ext} = m\\frac{d\\vec{v}}{dt} + \\vec{v}_{rel}\\frac{dm}{dt}$$
+Do NOT blindly apply $F = ma$ when mass is variable!`
+  },
+  {
+    keywords: /\b(quadratic\s*formula|roots\s*of\s*quadratic|discriminant|sridhar\s*acharya)\b/i,
+    getAnswer: (lang) => `### 📐 Quadratic Equation & Sridhar Acharya Formula
+For any standard quadratic equation:
+$$a x^2 + b x + c = 0 \\quad (a \\neq 0)$$
+
+**Roots Formula:**
+$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
+
+**Discriminant Analysis ($D = b^2 - 4ac$):**
+- $D > 0$: Two distinct real roots.
+- $D = 0$: Real and equal (coincident) roots ($x = -\\frac{b}{2a}$).
+- $D < 0$: Complex conjugate roots ($x = \\alpha \\pm i\\beta$).
+- $D$ is a perfect square ($a, b, c \\in \\mathbb{Q}$): Rational roots.
+
+**Topper Relation:**
+- Sum of roots: $\\alpha + \\beta = -\\frac{b}{a}$
+- Product of roots: $\\alpha\\beta = \\frac{c}{a}$`
+  },
+  {
+    keywords: /\b(snell'?s?\s*law|refraction|refractive\s*index)\b/i,
+    getAnswer: (lang) => `### 🔦 Snell's Law of Refraction
+**Fundamental Law:**
+The ratio of the sine of angle of incidence to the sine of angle of refraction is a constant equal to the relative refractive index of medium 2 with respect to medium 1:
+$$\\frac{\\sin i}{\\sin r} = \\frac{n_2}{n_1} = \\frac{v_1}{v_2} = \\frac{\\lambda_1}{\\lambda_2}$$
+
+Or in symmetric invariant form:
+$$n_1 \\sin i = n_2 \\sin r$$
+
+**Critical Angle & Total Internal Reflection (TIR):**
+When light travels from denser ($n_1$) to rarer ($n_2$) medium and angle of refraction $r = 90^\\circ$:
+$$\\sin \\theta_c = \\frac{n_2}{n_1}$$
+
+**⚠️ Board/NEET Trap:**
+During refraction, **frequency ($f$) NEVER changes**! Only wavelength ($\\lambda$) and velocity ($v$) change.`
+  },
+  {
+    keywords: /\b(kirchhoff'?s?\s*laws?|kcl|kvl|loop\s*rule|junction\s*rule)\b/i,
+    getAnswer: (lang) => `### ⚡ Kirchhoff's Circuit Laws
+**1. Junction Rule (KCL — Kirchhoff's Current Law):**
+The algebraic sum of currents entering and leaving any node/junction is zero:
+$$\\sum I = 0 \\implies I_{\\text{in}} = I_{\\text{out}}$$
+- **Governing Conservation Law:** **Conservation of Electric Charge**.
+
+**2. Loop Rule (KVL — Kirchhoff's Voltage Law):**
+The algebraic sum of changes in electric potential around any closed circuit loop is zero:
+$$\\sum \\Delta V = 0 \\implies \\sum \\mathcal{E} = \\sum I \\cdot R$$
+- **Governing Conservation Law:** **Conservation of Energy**.
+
+**Sign Convention Tip:**
+- Traversing a resistor in direction of current: $\\Delta V = -IR$.
+- Traversing a battery from $-$ to $+$ terminal: $\\Delta V = +\\mathcal{E}$.`
+  },
+  {
+    keywords: /\b(mitosis|meiosis|cell\s*division)\b/i,
+    getAnswer: (lang) => `### 🔬 Mitosis vs. Meiosis Quick Summary
+| Feature | Mitosis (Equational) | Meiosis (Reductional) |
+| :--- | :--- | :--- |
+| **Occurs in** | Somatic cells | Germ / Reproductive cells |
+| **Daughter cells** | 2 diploid ($2n$) | 4 haploid ($n$) |
+| **Crossing over** | Absent | Present in Pachytene of Prophase I |
+| **Synapsis / Bivalents** | Absent | Present in Zygotene |
+| **Purpose** | Growth, tissue repair | Gametogenesis, genetic diversity |
+
+**Mnemonic for Prophase I Stages:**
+**L**epto-**Z**ygo-**P**achy-**D**iplo-**D**ia
+*"Lazy Zebras Prance Down Delightfully"*
+- **Pachytene:** Crossing over mediated by enzyme **Recombinase** [NEET Repeater Favorite].`
+  },
+  {
+    keywords: /\b(sn1|sn2|nucleophilic\s*substitution)\b/i,
+    getAnswer: (lang) => `### 🧪 $S_N1$ vs. $S_N2$ Reaction Mechanisms
+| Parameter | $S_N1$ (Unimolecular) | $S_N2$ (Bimolecular) |
+| :--- | :--- | :--- |
+| **Kinetics** | Rate $= k[R-X]^1$ (1st order) | Rate $= k[R-X]^1[Nu^-]^1$ (2nd order) |
+| **Steps** | 2 steps (Carbocation intermediate) | 1 step concerted (Transition state) |
+| **Stereochemistry**| Racemization (retention + inversion) | 100% Walden Inversion (Umbrella turn) |
+| **Substrate Reactivity** | $3^\\circ > 2^\\circ > 1^\\circ > CH_3-X$ | $CH_3-X > 1^\\circ > 2^\\circ > 3^\\circ$ |
+| **Preferred Solvent** | Polar Protic ($H_2O, EtOH, AcOH$) | Polar Aprotic (\\text{Acetone, DMSO, DMF}) |
+| **Nucleophile** | Weak ($H_2O, ROH$) | Strong ($OH^-, RO^-, CN^-$) |
+
+**Examiner Trap:**
+Allylic and benzylic halides react rapidly under BOTH $S_N1$ (resonance stabilized carbocation) and $S_N2$ (low steric hindrance).`
+  }
+];
+
 export async function chatWithScribbleTutor(
   messages: { role: 'user' | 'model'; text: string }[],
   contextNote?: NoteContentPayload,
@@ -591,6 +752,16 @@ export async function chatWithScribbleTutor(
   const languagePreference = options?.language || 'auto';
   const explainMode = options?.explainMode || 'simple_analogy';
   const targetGrade = options?.classGrade || (contextNote?.classGrade || 'Class 10');
+
+  const lastUserMsg = messages[messages.length - 1]?.text || '';
+  const trimmed = lastUserMsg.trim().toLowerCase();
+
+  // 1. Instant Cache Check (<2ms response latency)
+  for (const item of FAST_ACADEMIC_INDEX) {
+    if (item.keywords.test(trimmed)) {
+      return item.getAnswer(languagePreference);
+    }
+  }
 
   let contextPrompt = '';
   if (contextNote) {
@@ -634,24 +805,13 @@ PREFERRED LANGUAGE: ${languagePreference.toUpperCase()}
 EXPLANATION FOCUS: ${explainMode.toUpperCase()}
 TARGET GRADE: ${targetGrade}
 
-LANGUAGE RULES:
-1. HINGLISH MODE (Default / Student Favorite):
-   - Speak in natural, lively conversational Hinglish like an awesome elder brother or mentor (e.g., "Dekho dost, concept bilkul simple hai!", "Chalo step-by-step solve karte hain...").
-   - Keep core scientific technical terms in standard English with LaTeX.
-2. HINDI MODE (हिंदी): Clear, sweet, and lucid Hindi with technical terms bracketed in English.
-3. ENGLISH MODE: Crystal-clear, step-by-step English with bold keywords and bulleted reasoning.
-4. AUTO MODE: Match the student's script and language choice automatically.
-
 PEDAGOGICAL PROBLEM-SOLVING FRAMEWORK:
-Whenever solving a problem or answering a doubt:
-1. 🌟 **The Intuitive Hook / Everyday Analogy**: Connect concept to daily life before numbers.
-2. 🔍 **Givens, Target & Governing Law**: State what is given, what to find, and write the governing equation in LaTeX.
-3. ✍️ **Step-by-Step Calculation / Derivation**: Clear arithmetic with explicit units at every step.
-4. 🎯 **Boxed Final Answer**: Boxed answer with correct SI units and significant digits.
-5. ⚠️ **25-Year Examiner Trap**: Why students lost marks or picked distractors in past 25 years.
-6. 💡 **1-Minute Topper Shortcut**: Elimination or dimensional trick.
-
-TONE: Enthusiastic, patient, encouraging, and empowering. Free education for all on Buzzing Brain!
+1. 🌟 **The Intuitive Hook / Everyday Analogy**
+2. 🔍 **Givens, Target & Governing Law** (in LaTeX)
+3. ✍️ **Step-by-Step Calculation / Derivation**
+4. 🎯 **Boxed Final Answer**
+5. ⚠️ **25-Year Examiner Trap**
+6. 💡 **1-Minute Topper Shortcut**
 ${contextPrompt}`;
 
   const contents = messages.map(m => ({
@@ -659,13 +819,16 @@ ${contextPrompt}`;
     parts: [{ text: m.text }]
   }));
 
-  const lastUserMsg = messages[messages.length - 1]?.text || '';
   const cacheKey = `chat_${lastUserMsg.toLowerCase().trim().slice(0, 100)}_${languagePreference}_${explainMode}`;
 
+  // Call Gemini Flash with optimized low-latency token budgets
   const aiReply = await callGeminiSafely({
     contents,
     systemInstruction,
     cacheKey,
+    maxOutputTokens: 850,
+    temperature: 0.2,
+    timeoutMs: 3500
   });
 
   if (aiReply) {

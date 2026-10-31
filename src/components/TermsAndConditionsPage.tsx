@@ -85,6 +85,30 @@ export const TermsAndConditionsPage: React.FC<TermsAndConditionsPageProps> = ({ 
             If you encounter a syllabus discrepancy, equation error, or technical bug, you are entitled to submit an official ticket via our Grievance Desk. Our administrative team commits to reviewing academic reports and maintaining syllabus fidelity.
           </p>
         </section>
+
+        <section className="space-y-2 border-t border-white/10 pt-4">
+          <h2 className="text-base sm:text-lg font-bold text-amber-300 flex items-center gap-2">
+            <span>6. Minimum &amp; Necessary Data Usage with Informed Consent</span>
+          </h2>
+          <p>
+            Buzzing Brain strictly adheres to principles of educational data minimization. We only collect the minimal, necessary data required to deliver educational services:
+          </p>
+          <ul className="list-disc pl-5 space-y-1 text-slate-400">
+            <li><strong>Account Identity:</strong> Display name and email to synchronize your personal study locker across devices.</li>
+            <li><strong>Phone / WhatsApp:</strong> Contact info for two-factor security and optional scorecards/revision updates sent to parents or guardians with explicit consent.</li>
+            <li><strong>Academic Telemetry:</strong> Test attempts and mistake journals, strictly utilized for your personalized adaptive learning recommendations.</li>
+            <li><strong>Zero Commercial Monetization:</strong> Student data is never sold, leased, or traded to third-party commercial advertisers or data brokers.</li>
+          </ul>
+        </section>
+
+        <section className="space-y-2 border-t border-white/10 pt-4">
+          <h2 className="text-base sm:text-lg font-bold text-emerald-300 flex items-center gap-2">
+            <span>7. Backend Cryptographic Authentication &amp; Zero Frontend Data Leakage</span>
+          </h2>
+          <p>
+            All administrative, academic synthesis, and user-sensitive backend endpoints require cryptographic Bearer ID tokens verified by Google/Firebase Admin SDK. Student passwords are never stored in plain text; they are secured using hardened PBKDF2/scrypt one-way cryptographic hashing. Private API keys and administrative records are quarantined on the server and are never revealed or leaked into client-side frontend browser bundles.
+          </p>
+        </section>
       </div>
     </div>
   );

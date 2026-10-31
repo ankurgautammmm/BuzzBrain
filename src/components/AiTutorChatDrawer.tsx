@@ -841,6 +841,34 @@ export const AiTutorChatDrawer: React.FC<AiTutorChatDrawerProps> = ({
         </div>
       )}
 
+      {/* Lightning Fast Concept Chips (<2ms instant cached solutions) */}
+      <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto text-[10px] shrink-0 no-scrollbar">
+        <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 shrink-0 flex items-center gap-1">
+          <Sparkles className="w-2.5 h-2.5" />
+          <span>FAST:</span>
+        </span>
+        {[
+          { label: "⚡ Ohm's Law", prompt: "Explain Ohm's Law with formula, units and examiner trap" },
+          { label: "🍃 Photosynthesis", prompt: "Photosynthesis chemical equation, light and dark reaction" },
+          { label: "🚀 Newton's 2nd Law", prompt: "Newton's second law of motion F=ma derivation and trap" },
+          { label: "📐 Quadratic Formula", prompt: "Quadratic equation formula and discriminant nature of roots" },
+          { label: "🔦 Snell's Law", prompt: "Snell's Law of refraction and critical angle" },
+          { label: "🔬 Mitosis vs Meiosis", prompt: "Difference between mitosis and meiosis table" },
+          { label: "🧪 SN1 vs SN2", prompt: "Comparison of SN1 and SN2 reaction mechanisms" },
+          { label: "⚡ Kirchhoff's Laws", prompt: "Kirchhoff Current and Voltage Laws statement and conservation principle" }
+        ].map((chip, idx) => (
+          <button
+            key={idx}
+            type="button"
+            disabled={isLoading}
+            onClick={() => handleSendMessage(chip.prompt, chip.label)}
+            className="whitespace-nowrap px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-slate-700 dark:text-slate-300 hover:text-purple-700 dark:hover:text-purple-300 border border-slate-200 dark:border-slate-700 transition font-medium cursor-pointer"
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       {/* Input Row with Voice Mic & Image Trigger */}
       <form 
         onSubmit={(e) => {

@@ -191,6 +191,22 @@ export interface UserProfile {
   streakDays?: number;
   lastActiveDate?: string;
   badges?: string[];
+  avatarId?: string;
+  customAvatarUrl?: string;
+  schoolName?: string;
+  coachingInstitute?: string;
+  targetScore?: string;
+  dailyStudyHours?: number;
+  studentRollNumber?: string;
+  parentInfo?: {
+    parentName?: string;
+    parentPhone?: string;
+    relation?: 'Father' | 'Mother' | 'Guardian' | string;
+    preferredCommunication?: 'WhatsApp' | 'SMS' | 'Call' | string;
+    consentGiven?: boolean;
+  };
+  dataConsentVersion?: string;
+  dataConsentAcceptedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

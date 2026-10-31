@@ -54,11 +54,12 @@ import { ExperimentJournal } from './labs/ExperimentJournal';
 import { VirtualPracticalAcademy } from '../features/virtual-lab';
 import { AnatomyLabWorkspace } from '../features/anatomy-lab';
 import { Studio3DSceneViewer } from '../features/threejs-studio/Studio3DSceneViewer';
+import { SciLabStudio } from '../features/scilab/SciLabStudio';
 import { UserProfile } from '../types';
 
 interface InteractiveLabsProps {
   activeClass: string;
-  initialSubTab?: 'virtual_academy' | 'mindmaps' | 'organs3d' | 'studio3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals';
+  initialSubTab?: 'virtual_academy' | 'mindmaps' | 'organs3d' | 'studio3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals' | 'scilab';
   userProfile?: UserProfile | null;
   onGoToSciLab?: () => void;
 }
@@ -69,8 +70,8 @@ export const InteractiveLabsAndMindMaps: React.FC<InteractiveLabsProps> = ({
   userProfile,
   onGoToSciLab
 }) => {
-  // Main Navigation Modes (Virtual Academy 3D, 3D Studio, Mind Maps, 3D Organs, Calibrated Virtual Tools, Simulations, Experiment Journal, Practicals)
-  const [activeMainTab, setActiveMainTab] = useState<'virtual_academy' | 'mindmaps' | 'organs3d' | 'studio3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals'>(initialSubTab);
+  // Main Navigation Modes (Virtual Academy 3D, SciLab BioMolecular Studio, 3D Studio, Mind Maps, 3D Organs, Calibrated Virtual Tools, Simulations, Experiment Journal, Practicals)
+  const [activeMainTab, setActiveMainTab] = useState<'virtual_academy' | 'mindmaps' | 'organs3d' | 'studio3d' | 'virtual_tools' | 'simulations' | 'journal' | 'practicals' | 'scilab'>(initialSubTab);
 
   // Live tool readings persisted for quick one-click import into Experiment Journal
   const [liveToolReadings, setLiveToolReadings] = useState<{
@@ -499,20 +500,33 @@ export const InteractiveLabsAndMindMaps: React.FC<InteractiveLabsProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              if (onGoToSciLab) onGoToSciLab();
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer bg-gradient-to-r from-teal-500/20 to-cyan-500/20 hover:from-teal-500/30 hover:to-cyan-500/30 text-cyan-300 border border-cyan-400/30 hover:border-cyan-400/60 hover:text-white"
-            title="Launch SciLab: Bioinformatics, Molecular Dynamics & Chemical Biology Studio"
+            onClick={() => setActiveMainTab('scilab')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeMainTab === 'scilab'
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-cyan-900/40 scale-[1.02]'
+                : 'text-cyan-300 hover:text-white bg-teal-500/10 border border-teal-500/20'
+            }`}
+            title="SciLab: 3D BioMolecular Structures, AlphaFold PDB, Molecular Dynamics & Drug Discovery Workbench"
           >
-            <Dna className="w-4 h-4 text-cyan-400" />
-            <span>SciLab Studio</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider font-bold bg-cyan-400/25 text-cyan-200 border border-cyan-400/30">
-              PRO
+            <Dna className={`w-4 h-4 ${activeMainTab === 'scilab' ? 'text-white animate-spin-slow' : 'text-cyan-400'}`} />
+            <span>SciLab (BioMolecular 3D)</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider font-bold ${
+              activeMainTab === 'scilab' ? 'bg-white/20 text-white' : 'bg-cyan-400/20 text-cyan-200 border border-cyan-400/30'
+            }`}>
+              ALPHAFOLD
             </span>
           </button>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* 0. SCILAB BIOMOLECULAR & MOLECULAR DYNAMICS 3D WORKBENCH */}
+      {/* ========================================================= */}
+      {activeMainTab === 'scilab' && (
+        <div className="rounded-3xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+          <SciLabStudio />
+        </div>
+      )}
 
       {/* ========================================================= */}
       {/* 0. 3D VIRTUAL PRACTICAL ACADEMY MULTI-STAGE WORKFLOWS */}

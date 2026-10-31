@@ -34,6 +34,23 @@ import {
   VERIFIED_QUESTION_BANK, 
   validateQuestion 
 } from './questionService';
+import { adminAuth } from '../src/lib/firebase-admin';
+import {
+  getMongoStatus,
+  upsertMongoUser,
+  findMongoUserById,
+  saveMongoNote,
+  findMongoNotes,
+  deleteMongoNote,
+  saveMongoTestAttempt,
+  findMongoTestAttempts,
+  saveMongoMistake,
+  findMongoMistakes,
+  createMongoComplaint,
+  listMongoComplaints,
+  updateMongoComplaintStatus,
+  bulkMigrateToMongo
+} from './mongoService';
 
 export const apiRouter = express.Router();
 
@@ -90,13 +107,29 @@ const TRUSTED_ADMIN_EMAILS = [
   ...envAdminEmails
 ];
 
-function adminAuthMiddleware(req: Request, res: Response, next: () => void) {
-  const adminHeader = (req.headers['x-admin-email'] as string || req.headers['authorization'] || '').toLowerCase();
-  const isMatch = TRUSTED_ADMIN_EMAILS.some(email => adminHeader.includes(email.toLowerCase()));
-  if (!isMatch && process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Administrative authorization credentials required.' });
+async function adminAuthMiddleware(req: Request, res: Response, next: () => void) {
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split('Bearer ')[1];
+    try {
+      const decoded = await adminAuth.verifyIdToken(token);
+      const email = (decoded.email || '').toLowerCase();
+      if (TRUSTED_ADMIN_EMAILS.includes(email) || (decoded as any).admin === true) {
+        (req as any).user = decoded;
+        return next();
+      }
+      return res.status(403).json({ error: 'Administrative authorization credentials required.' });
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized: Invalid administrative credentials.' });
+    }
   }
-  next();
+
+  // Development bypass only if running in dev mode with explicit internal secret
+  if (process.env.NODE_ENV !== 'production' && req.headers['x-admin-secret'] && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET) {
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Administrative authorization Bearer token required.' });
 }
 
 // Health check
@@ -955,39 +988,40 @@ apiRouter.get('/admin/notes/jobs', adminAuthMiddleware, (_req: Request, res: Res
 import { academicStore, hasPermission, AcademicRole, AcademicPermission } from './academicService';
 
 // Helper to resolve caller role and identity
-function resolveAcademicCaller(req: Request): {
+async function resolveAcademicCaller(req: Request): Promise<{
   role: AcademicRole;
   userId: string;
   userEmail: string;
-} {
-  const headerRole = ((req.headers['x-user-role'] as string) || '').toLowerCase();
-  const headerEmail = ((req.headers['x-user-email'] as string) || (req.headers['x-admin-email'] as string) || '').toLowerCase();
-  const headerUid = (req.headers['x-user-id'] as string) || 'staff_actor';
-
-  // Verify against trusted administrator whitelist
-  if (TRUSTED_ADMIN_EMAILS.some((e) => headerEmail.includes(e.toLowerCase()))) {
-    return { role: 'admin', userId: headerUid, userEmail: headerEmail || 'admin@buzzingbrain.edu' };
+}> {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split('Bearer ')[1];
+    try {
+      const decoded = await adminAuth.verifyIdToken(token);
+      const email = (decoded.email || '').toLowerCase();
+      if (TRUSTED_ADMIN_EMAILS.includes(email) || (decoded as any).admin === true) {
+        return { role: 'admin', userId: decoded.uid, userEmail: email };
+      }
+      if ((decoded as any).role === 'teacher' || (decoded as any).teacher === true) {
+        return { role: 'teacher', userId: decoded.uid, userEmail: email };
+      }
+      return { role: 'student', userId: decoded.uid, userEmail: email };
+    } catch {
+      // Invalid token falls through to unauthenticated
+    }
   }
 
-  if (headerRole === 'admin') {
-    return { role: 'admin', userId: headerUid, userEmail: headerEmail || 'admin@buzzingbrain.edu' };
+  // Development fallback for local staff testing only if not in production
+  if (process.env.NODE_ENV !== 'production' && req.headers['x-staff-dev'] === 'true') {
+    return { role: 'teacher', userId: 'dev_teacher', userEmail: 'teacher@buzzingbrain.edu' };
   }
 
-  if (headerRole === 'teacher') {
-    return { role: 'teacher', userId: headerUid, userEmail: headerEmail || 'teacher@buzzingbrain.edu' };
-  }
-
-  // Fallback: If not specified in dev, treat as teacher with default scope; in production default to student
-  if (process.env.NODE_ENV !== 'production') {
-    return { role: 'teacher', userId: headerUid || 'teacher_1', userEmail: headerEmail || 'teacher@buzzingbrain.edu' };
-  }
-
-  return { role: 'student', userId: headerUid, userEmail: headerEmail };
+  return { role: 'student', userId: 'anonymous', userEmail: '' };
 }
 
 function requireAcademicPermission(permission: AcademicPermission) {
-  return (req: Request, res: Response, next: () => void) => {
-    const caller = resolveAcademicCaller(req);
+  return async (req: Request, res: Response, next: () => void) => {
+    const caller = await resolveAcademicCaller(req);
     if (caller.role === 'student' || !hasPermission(caller.role, permission)) {
       return res.status(403).json({
         error: 'Forbidden: Insufficient academic role privileges for this operation.',
@@ -1376,6 +1410,191 @@ apiRouter.post('/parent-bot/reset-blocked', (req: Request, res: Response) => {
   }
   const removed = resetBlockedPhone(phone);
   res.json({ success: true, phone, removed });
+});
+
+// ============================================================================
+// MONGODB STORAGE ENDPOINTS (P0 / P1 Persistent Store)
+// ============================================================================
+
+// GET /api/mongo/status — Health & Connection Diagnostics
+apiRouter.get('/mongo/status', async (_req: Request, res: Response) => {
+  try {
+    const status = await getMongoStatus();
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/mongo/users/sync — Upsert Student/Parent/Teacher Profile
+apiRouter.post('/mongo/users/sync', async (req: Request, res: Response) => {
+  try {
+    const userDoc = req.body;
+    if (!userDoc || !userDoc.uid) {
+      return res.status(400).json({ success: false, error: 'User UID is required' });
+    }
+    const result = await upsertMongoUser(userDoc);
+    res.json({ success: true, user: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/mongo/users/:uid — Fetch User by ID
+apiRouter.get('/mongo/users/:uid', async (req: Request, res: Response) => {
+  try {
+    const uid = req.params.uid;
+    const user = await findMongoUserById(uid);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found in MongoDB' });
+    }
+    res.json({ success: true, user });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/mongo/notes — Save Study Note
+apiRouter.post('/mongo/notes', async (req: Request, res: Response) => {
+  try {
+    const note = req.body;
+    if (!note || !note.title) {
+      return res.status(400).json({ success: false, error: 'Note title and payload required' });
+    }
+    const saved = await saveMongoNote(note);
+    res.json({ success: true, note: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/mongo/notes — Fetch Notes (with optional filters)
+apiRouter.get('/mongo/notes', async (req: Request, res: Response) => {
+  try {
+    const { userId, classGrade, subject, chapter } = req.query;
+    const notes = await findMongoNotes({
+      userId: userId as string | undefined,
+      classGrade: classGrade as string | undefined,
+      subject: subject as string | undefined,
+      chapter: chapter as string | undefined
+    });
+    res.json({ success: true, count: notes.length, notes });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/mongo/notes/:id — Delete Note
+apiRouter.delete('/mongo/notes/:id', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const deleted = await deleteMongoNote(id);
+    res.json({ success: true, deleted });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/mongo/tests/attempt — Record Examination Attempt
+apiRouter.post('/mongo/tests/attempt', async (req: Request, res: Response) => {
+  try {
+    const attempt = req.body;
+    if (!attempt || !attempt.testId) {
+      return res.status(400).json({ success: false, error: 'Test attempt data required' });
+    }
+    const saved = await saveMongoTestAttempt(attempt);
+    res.json({ success: true, attempt: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/mongo/tests/attempts/:userId — Fetch Test Attempts for Student
+apiRouter.get('/mongo/tests/attempts/:userId', async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.userId;
+    const testId = req.query.testId as string | undefined;
+    const attempts = await findMongoTestAttempts(userId, testId);
+    res.json({ success: true, count: attempts.length, attempts });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/mongo/mistakes — Save Mistake Record
+apiRouter.post('/mongo/mistakes', async (req: Request, res: Response) => {
+  try {
+    const mistake = req.body;
+    if (!mistake || !mistake.questionId || !mistake.userId) {
+      return res.status(400).json({ success: false, error: 'Question ID and User ID required' });
+    }
+    const saved = await saveMongoMistake(mistake);
+    res.json({ success: true, mistake: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/mongo/mistakes/:userId — Fetch Mistake Book for Student
+apiRouter.get('/mongo/mistakes/:userId', async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.userId;
+    const mistakes = await findMongoMistakes(userId);
+    res.json({ success: true, count: mistakes.length, mistakes });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/mongo/complaints — Submit Grievance Complaint Ticket
+apiRouter.post('/mongo/complaints', async (req: Request, res: Response) => {
+  try {
+    const complaint = req.body;
+    if (!complaint || !complaint.subject || !complaint.studentEmail) {
+      return res.status(400).json({ success: false, error: 'Complaint subject and email required' });
+    }
+    const saved = await createMongoComplaint(complaint);
+    res.json({ success: true, complaint: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/mongo/complaints — List Grievance Complaints
+apiRouter.get('/mongo/complaints', async (req: Request, res: Response) => {
+  try {
+    const studentEmail = req.query.studentEmail as string | undefined;
+    const complaints = await listMongoComplaints(studentEmail);
+    res.json({ success: true, count: complaints.length, complaints });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/mongo/complaints/:id/status — Update Grievance Complaint Status
+apiRouter.patch('/mongo/complaints/:id/status', async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const { status, adminResponse } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'Status is required' });
+    }
+    const updated = await updateMongoComplaintStatus(id, status, adminResponse);
+    res.json({ success: true, complaint: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/mongo/migrate-from-local — Bulk Import from Local/Client State
+apiRouter.post('/mongo/migrate-from-local', async (req: Request, res: Response) => {
+  try {
+    const { users, notes, attempts, mistakes, complaints } = req.body;
+    const result = await bulkMigrateToMongo({ users, notes, attempts, mistakes, complaints });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 

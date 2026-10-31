@@ -2,11 +2,19 @@ import { OrganModelSpec, AnatomicalStructure } from '../types/anatomy';
 import { HEART_ORGAN_SPEC } from './heartAnatomyData';
 import { KIDNEY_ORGAN_SPEC } from './kidneyAnatomyData';
 import { BRAIN_ORGAN_SPEC } from './brainAnatomyData';
+import { STOMACH_ORGAN_SPEC } from './stomachAnatomyData';
+import { EAR_ORGAN_SPEC } from './earAnatomyData';
+import { LIVER_ORGAN_SPEC } from './liverAnatomyData';
+import { NEURON_ORGAN_SPEC } from './neuronAnatomyData';
 
 export const ANATOMY_ORGAN_REGISTRY: OrganModelSpec[] = [
   HEART_ORGAN_SPEC,
   KIDNEY_ORGAN_SPEC,
-  BRAIN_ORGAN_SPEC
+  BRAIN_ORGAN_SPEC,
+  STOMACH_ORGAN_SPEC,
+  EAR_ORGAN_SPEC,
+  LIVER_ORGAN_SPEC,
+  NEURON_ORGAN_SPEC,
 ];
 
 export function getOrganById(id: string): OrganModelSpec | undefined {

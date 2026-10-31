@@ -33,6 +33,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { logger } from './logger';
+import { checkLockoutStatus, recordFailedAttempt, resetFailedAttempts } from './authRateLimiter';
 import { StudyNote, UserProfile, ComplaintTicket, MistakeItem, TestAttemptRecord, ExperimentJournalEntry } from '../types';
 
 export enum OperationType {
@@ -199,12 +200,44 @@ export async function signUpWithEmail(
 export async function signInWithEmail(email: string, password: string): Promise<FirebaseUser> {
   const cleanEmail = email.trim();
   logger.info('Auth', `[AUTH] Attempting email sign-in for: ${cleanEmail}`);
+
+  // 1. Check if account is locked due to too many failed password trials
+  const lockout = checkLockoutStatus(cleanEmail);
+  if (lockout.isLocked) {
+    const minutes = Math.floor(lockout.remainingSeconds / 60);
+    const seconds = lockout.remainingSeconds % 60;
+    const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    const err: any = new Error(`Account temporarily locked for security after 5 failed password attempts. Please wait ${timeStr} or use "Forgot Password" to reset.`);
+    err.code = 'auth/too-many-requests';
+    err.remainingSeconds = lockout.remainingSeconds;
+    throw err;
+  }
+
   try {
     const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+    // Successful login -> reset failed attempts counter
+    resetFailedAttempts(cleanEmail);
     logger.info('Auth', `[AUTH] Email sign-in successful: ${cred.user.uid}`);
     return cred.user;
   } catch (error: any) {
-    logger.error('Auth', `[AUTH] Email sign-in failed [${error?.code || 'auth/unknown'}]:`, error?.message);
+    const code = error?.code || 'auth/unknown';
+    // Record failed trial on invalid credentials
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/user-not-found') {
+      const trialResult = recordFailedAttempt(cleanEmail);
+      if (trialResult.isLocked) {
+        const err: any = new Error('Maximum 5 failed attempts reached! Your account is locked for 15 minutes for your security. You can reset your password anytime via "Forgot Password".');
+        err.code = 'auth/too-many-requests';
+        err.remainingSeconds = trialResult.remainingSeconds;
+        throw err;
+      } else {
+        const remaining = 5 - trialResult.failedAttempts;
+        const err: any = new Error(`Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before a 15-minute security lockout.`);
+        err.code = code;
+        err.remainingAttempts = remaining;
+        throw err;
+      }
+    }
+    logger.error('Auth', `[AUTH] Email sign-in failed [${code}]:`, error?.message);
     throw error;
   }
 }
@@ -523,6 +556,22 @@ export async function updateStudentProfile(
     targetExam?: string;
     acceptedTerms?: boolean;
     role?: 'student' | 'teacher' | 'admin';
+    avatarId?: string;
+    customAvatarUrl?: string;
+    schoolName?: string;
+    coachingInstitute?: string;
+    targetScore?: string;
+    dailyStudyHours?: number;
+    studentRollNumber?: string;
+    parentInfo?: {
+      parentName?: string;
+      parentPhone?: string;
+      relation?: string;
+      preferredCommunication?: string;
+      consentGiven?: boolean;
+    };
+    dataConsentVersion?: string;
+    dataConsentAcceptedAt?: string;
   }
 ): Promise<UserProfile> {
   const userRef = doc(db, 'users', userId);

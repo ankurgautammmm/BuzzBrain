@@ -47,6 +47,7 @@ import { parseMathInText } from '../utils/latexParser';
 import { UserProfile } from '../types';
 import { saveTestAttempt, saveMistake, awardStudentXP } from '../services/firebase';
 import { logger } from '../services/logger';
+import { ExamFirstTestBuilder } from './ExamFirstTestBuilder';
 
 interface TestSectionProps {
   user: UserProfile | null;
@@ -54,7 +55,7 @@ interface TestSectionProps {
   activeClass: string;
   onGoToStudio?: (cmd: string) => void;
   onGoToAiTutor?: (topic?: string, chapter?: string) => void;
-  initialSubTab?: 'catalog' | 'pyq_guru' | 'pyq_test';
+  initialSubTab?: 'exam_builder' | 'catalog' | 'pyq_guru' | 'pyq_test';
   initialTopic?: string;
   initialGrade?: string;
   initialSubject?: string;
@@ -66,7 +67,7 @@ export const TestSection: React.FC<TestSectionProps> = ({
   activeClass,
   onGoToStudio,
   onGoToAiTutor,
-  initialSubTab = 'catalog',
+  initialSubTab = 'exam_builder',
   initialTopic,
   initialGrade,
   initialSubject,
@@ -99,8 +100,8 @@ export const TestSection: React.FC<TestSectionProps> = ({
   const [isGeneratingAiTest, setIsGeneratingAiTest] = useState(false);
   const [aiTestError, setAiTestError] = useState<string | null>(null);
 
-  // Top-Level Segmented Sub-Tab in Test Arena: Catalog vs 25-Yr PYQ Guru vs PYQ Test Simulator
-  const [testSubTab, setTestSubTab] = useState<'catalog' | 'pyq_guru' | 'pyq_test'>(initialSubTab);
+  // Top-Level Segmented Sub-Tab in Test Arena: Exam Builder vs Catalog vs 50-Yr PYQ Guru vs PYQ Test Simulator
+  const [testSubTab, setTestSubTab] = useState<'exam_builder' | 'catalog' | 'pyq_guru' | 'pyq_test'>(initialSubTab);
 
   useEffect(() => {
     if (initialSubTab) {
@@ -1471,8 +1472,24 @@ export const TestSection: React.FC<TestSectionProps> = ({
   // 2. TEST CATALOG & SELECTION ARENA (Dark Luxury Portal)
   return (
     <div className="w-full max-w-6xl mx-auto py-8 space-y-8 text-slate-100">
-      {/* Top Segmented Sub-Tab Switcher: Tests Catalog | 25-Yr PYQ Guru | PYQ Test Simulator */}
+      {/* Top Segmented Sub-Tab Switcher: Exam Builder | Tests Catalog | 50-Yr PYQ Guru | PYQ Test Simulator */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs sm:text-sm font-bold bg-[#070b1e] p-1.5 rounded-2xl border border-white/10 shadow-lg">
+        <button
+          type="button"
+          onClick={() => setTestSubTab('exam_builder')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+            testSubTab === 'exam_builder'
+              ? 'bg-amber-400 text-slate-950 font-extrabold shadow-md'
+              : 'text-slate-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Target className="w-4 h-4" />
+          <span>Exam-First Test Builder</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-black/20 text-slate-900 font-black">
+            50-Yr Model
+          </span>
+        </button>
+
         <button
           type="button"
           onClick={() => setTestSubTab('catalog')}
@@ -1484,7 +1501,7 @@ export const TestSection: React.FC<TestSectionProps> = ({
         >
           <Award className="w-4 h-4" />
           <span>Chapter Tests &amp; Mocks</span>
-          <span className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-black/20">
+          <span className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/10 text-slate-300">
             200+ Tests
           </span>
         </button>
@@ -1504,9 +1521,9 @@ export const TestSection: React.FC<TestSectionProps> = ({
           }`}
         >
           <BrainCircuit className="w-4 h-4 text-amber-300" />
-          <span>25-Year PYQ Guru &amp; Matrix</span>
+          <span>50-Year PYQ Guru &amp; Matrix</span>
           <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/20 text-white font-bold">
-            2000–2025
+            1975–2025
           </span>
         </button>
 
@@ -1526,6 +1543,18 @@ export const TestSection: React.FC<TestSectionProps> = ({
           </span>
         </button>
       </div>
+
+      {/* SUB-TAB 0: EXAM-FIRST TEST BUILDER (Official 2026 Curriculum Hierarchy) */}
+      {testSubTab === 'exam_builder' && (
+        <ExamFirstTestBuilder
+          onStartTest={(test, pattern) => {
+            startTest(test, pattern);
+          }}
+          onRequireAuth={onRequireAuth}
+          isAuthenticated={Boolean(user)}
+          activeClass={activeClass}
+        />
+      )}
 
       {/* SUB-TAB 1: CHAPTER TESTS & MOCKS CATALOG */}
       {testSubTab === 'catalog' && (

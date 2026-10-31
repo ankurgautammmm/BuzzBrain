@@ -23,6 +23,7 @@ interface NotebookHeaderProps {
   onOpenPromptModal: () => void;
   onOpenQuizModal: () => void;
   onOpenChapterDirectory: () => void;
+  onBackToDirectory?: () => void;
   onOpenPyqAgent?: () => void;
   onOpenPyqTestModal?: () => void;
   onNavigateToPyq?: () => void;
@@ -46,6 +47,7 @@ export const NotebookHeader: React.FC<NotebookHeaderProps> = ({
   onOpenPromptModal,
   onOpenQuizModal,
   onOpenChapterDirectory,
+  onBackToDirectory,
   onOpenPyqAgent,
   onOpenPyqTestModal,
   onNavigateToPyq,
@@ -104,22 +106,6 @@ export const NotebookHeader: React.FC<NotebookHeaderProps> = ({
     { id: 'purple', label: 'Royal Violet', bg: '#581c87' },
   ];
 
-  const handleTriggerPyq = () => {
-    if (onNavigateToPyq) {
-      onNavigateToPyq();
-    } else if (onOpenPyqAgent) {
-      onOpenPyqAgent();
-    }
-  };
-
-  const handleTriggerPyqTest = () => {
-    if (onNavigateToPyqTest) {
-      onNavigateToPyqTest();
-    } else if (onOpenPyqTestModal) {
-      onOpenPyqTestModal();
-    }
-  };
-
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-white/10 shadow-lg no-print font-sans-clean text-slate-100">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3">
@@ -142,15 +128,26 @@ export const NotebookHeader: React.FC<NotebookHeaderProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-slate-400 font-normal hidden sm:block">
-                Chapter-wise revision notes, PYQs, and exam preparation.
+                Chapter-wise revision notes &amp; topper register layout.
               </p>
             </div>
           </div>
 
           {/* Grouped, Compact BuzzingBrain Controls */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {/* Group 1: Navigation & PYQs */}
+            {/* Group 1: Navigation & Directory */}
             <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
+              {onBackToDirectory && (
+                <button
+                  type="button"
+                  onClick={onBackToDirectory}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/30 px-2.5 py-1.5 text-xs font-bold transition cursor-pointer"
+                  title="Return to the curriculum directory and search bar"
+                >
+                  <span>&larr; Directory</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onOpenChapterDirectory}
@@ -159,26 +156,6 @@ export const NotebookHeader: React.FC<NotebookHeaderProps> = ({
               >
                 <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
                 <span>All Chapters</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleTriggerPyq}
-                className="flex items-center gap-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer"
-                title="Navigate directly to 25-Year PYQ Guru in Tests section"
-              >
-                <BrainCircuit className="h-3.5 w-3.5 text-amber-300" />
-                <span>25-Yr PYQ Guru</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleTriggerPyqTest}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer"
-                title="Practice 25-Year PYQ Test in Tests Arena"
-              >
-                <Target className="h-3.5 w-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">PYQ Test</span>
               </button>
             </div>
 
